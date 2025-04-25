@@ -19,6 +19,35 @@ def unpack_data_containers(
     weight_by_nsamples: bool=True,
 ):
     """
+    Unpack the data containers into a format suitable for imaging.
+
+    Parameters
+    ----------
+    data : datacontainer.DataContainer
+        The visibility data to be unpacked.
+    flags : datacontainer.DataContainer
+        The flags for the visibility data.
+    nsamples : datacontainer.DataContainer
+        The nsamples for the visibility data.
+    pol : str
+        The polarization to be used. Default is 'ee'.
+    antpos : dict
+        The antenna positions. If None, will use the positions from the data container.
+    freqs : np.ndarray
+        The frequencies to be used. If None, will use the frequencies from the data container.
+    time_slice : tuple
+        The time slice to be used. Default is (0, None).
+    freq_slice : tuple
+        The frequency slice to be used. Default is (0, None).
+    antpairs : list[tuple]
+        The antenna pairs to be used. If None, will use all antenna pairs.
+    weight_by_nsamples : bool
+        Whether to weight the data by nsamples. Default is True.
+
+    Returns
+    -------
+    imaging_data : dict
+        A dictionary containing the unpacked data, weights, uvw coordinates, times, and frequencies.
     """
     if antpairs is None:
         antpairs = data.antpairs()
@@ -67,14 +96,36 @@ def unpack_data_containers(
     return imaging_data
 
 def phase_track_to_source(
-    data: np.ndarray,
+    vis: np.ndarray,
     uvw: np.ndarray,
     times: np.ndarray,
-    freqs: np.ndarray,
     ra_src: float,
     dec_src: float,
-    telescope_loc
+    telescope_loc: EarthLocation,
 ):
+    """
+    Phase track the data to a source position.
+
+    Parameters
+    ----------
+    vis : np.ndarray
+        The visibility data to be phased. Size (nbls, ntimes, nfreqs)
+    uvw : np.ndarray
+        The uvw coordinates of the visibility data. Size (nbls, 3, nfreqs)
+    times : np.ndarray
+        The times of the visibility data. Size (ntimes,)
+    ra_src : float
+        The right ascension of the source in degrees.
+    dec_src : float
+        The declination of the source in degrees.
+    telescope_loc : EarthLocation
+        The location of the telescope. Should be an astropy EarthLocation object.
+
+    Returns
+    -------
+    vis : np.ndarray
+        The phased visibility data. Size (nbls, ntimes, nfreqs)
+    """
     if isinstance(times, np.ndarray):
         times = Time(times, format='jd')
         
@@ -110,6 +161,33 @@ def snapshot_imager(
     eps=1e-13,
 ):
     """
+    Perform a snapshot image of the data using the Finufft library.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        The visibility data to be imaged. Size (nbls, ntimes, nfreqs)
+    weights : np.ndarray
+        The weights for the visibility data. Size (nbls, ntimes, nfreqs)
+    ucoords : np.ndarray
+        The u-coordinates of the visibility data. Size (nbls, nfreqs)
+    vcoords : np.ndarray
+        The v-coordinates of the visibility data. Size (nbls, nfreqs)
+    npix : int
+        The number of pixels in the image along one axis
+    fov : float
+        The field of view in degrees.
+    eps : float
+        The tolerance for the NUFFT algorithm.
+
+    Returns
+    -------
+    image_stack : np.ndarray
+        The resulting image stack.
+    lgrid : np.ndarray
+        The l-coordinates of the image grid.
+    mgrid : np.ndarray
+        The m-coordinates of the image grid.
     """
     # Get maximum extent of the coordinates
     umax = np.max([
