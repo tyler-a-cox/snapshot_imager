@@ -151,7 +151,7 @@ def phase_track_to_source(
     return vis * phase
 
 
-def snapshot_imager(
+def snapshot_imager_single_frequency(
     data: np.ndarray, 
     weights: np.ndarray,
     ucoords: np.ndarray,
@@ -161,7 +161,85 @@ def snapshot_imager(
     eps=1e-13,
 ):
     """
-    Perform a snapshot image of the data using the Finufft library.
+    TODO: change the changes of names of the input variables to match unpack_data_containers output
+
+    Perform a snapshot image of the data using the finufft library.
+
+
+    Parameters
+    ----------
+    data : np.ndarray
+        The visibility data to be imaged. Size (nbls, ntimes, nfreqs)
+    weights : np.ndarray
+        The weights for the visibility data. Size (nbls, ntimes, nfreqs)
+    ucoords : np.ndarray
+        The u-coordinates of the visibility data. Size (nbls, nfreqs)
+    vcoords : np.ndarray
+        The v-coordinates of the visibility data. Size (nbls, nfreqs)
+    npix : int
+        The number of pixels in the image along one axis
+    fov : float
+        The field of view in degrees.
+    eps : float
+        The tolerance for the NUFFT algorithm.
+
+    Returns
+    -------
+    image_stack : np.ndarray
+        The resulting image stack.
+    lgrid : np.ndarray
+        The l-coordinates of the image grid.
+    mgrid : np.ndarray
+        The m-coordinates of the image grid.
+    """
+    # Get maximum extent of the coordinates
+    umax = np.max([
+        np.max(np.abs(ucoords)), np.max(np.abs(vcoords))
+    ])
+
+    # Get the shape of the data for looping
+    nbls, ntimes, nfreqs = data.shape
+
+    # Set the grid coordinates
+    extent = np.deg2rad(fov/2)
+    lcoords = np.sin(np.linspace(-extent, extent, npix))
+    mcoords = np.sin(np.linspace(-extent, extent, npix))
+    lgrid, mgrid = np.meshgrid(lcoords, mcoords)
+    lgrid, mgrid = np.ravel(lgrid), np.ravel(mgrid)
+    
+    image_stack = []
+    for ti in tqdm.tqdm(range(ntimes)):
+        freq_stack = []
+        for fi in range(nfreqs):
+            image = finufft.nufft2d3(
+                2 * np.pi * ucoords[:, fi] / umax,
+                2 * np.pi * vcoords[:, fi] / umax,
+                data[:, ti, fi] * weights[:, ti, fi],
+                lgrid * umax,
+                mgrid * umax,
+                eps=eps,
+            )
+            freq_stack.append(image)
+            
+        image_stack.append(freq_stack)
+
+    image_stack = np.reshape(image_stack, (ntimes, nfreqs, npix, npix))
+
+    return image_stack, lgrid, mgrid
+
+def snapshot_imager_mfs(
+    data: np.ndarray, 
+    weights: np.ndarray,
+    ucoords: np.ndarray,
+    vcoords: np.ndarray,
+    npix: int=200,
+    fov: float=10,
+    eps=1e-13,
+):
+    """
+    TODO: change the changes of names of the input variables to match unpack_data_containers output
+
+    Perform a snapshot image of the data using the finufft library. This function performs multi-frequency synthesis (MFS) imaging.
 
     Parameters
     ----------
