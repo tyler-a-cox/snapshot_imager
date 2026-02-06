@@ -133,9 +133,9 @@ def compute_image_grid(npix: int, fov: float):
     
     where θ_E and θ_N are angular offsets in the East and North directions.
     """
-    extent = np.deg2rad(fov / 2)
-    lcoords = np.sin(np.linspace(-extent, extent, npix))
-    mcoords = np.sin(np.linspace(-extent, extent, npix))
+    extent = np.sin(np.deg2rad(fov / 2))
+    lcoords = np.linspace(-extent, extent, npix)
+    mcoords = np.linspace(-extent, extent, npix)
     lgrid, mgrid = np.meshgrid(lcoords, mcoords)
     
     return lcoords, mcoords, lgrid, mgrid
