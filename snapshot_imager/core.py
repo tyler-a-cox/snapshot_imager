@@ -103,7 +103,8 @@ def scale_uv_coordinates(
 def prepare_weighted_visibilities(
     vis: np.ndarray,
     weights: np.ndarray,
-    freq_idx: int
+    freq_idx: Optional[int] = None,
+    time_idx: Optional[int] = None
 ) -> np.ndarray:
     """
     Prepare weighted visibilities for a specific frequency.
@@ -127,8 +128,17 @@ def prepare_weighted_visibilities(
     The output is transposed to (ntimes, nbls) for compatibility with
     FINUFFT's n_trans parameter.
     """
-    weighted_data = vis[:, :, freq_idx] * weights[:, :, freq_idx]
-    return weighted_data.T  # Transpose to (ntimes, nbls)
+    if freq_idx is None and time_idx is None:
+        raise ValueError("Must specify either freq_idx or time_idx")
+    if freq_idx is not None and time_idx is not None:
+        raise ValueError("Cannot specify both freq_idx and time_idx")
+    
+    if freq_idx is not None:
+        weighted_data = vis[:, :, freq_idx] * weights[:, :, freq_idx]
+    else:
+        weighted_data = vis[:, time_idx, :] * weights[:, time_idx, :]
+
+    return weighted_data.T  # Transpose to (ntimes/nfreqs, nbls)
 
 
 def validate_imaging_inputs(
