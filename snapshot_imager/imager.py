@@ -116,15 +116,15 @@ def snapshot_imager_type1(
             weighted_data = prepare_weighted_visibilities(
                 imaging_data.vis,
                 imaging_data.weights,
-                fi
+                freq_idx=fi
             )
             data_gpu = xp.asarray(weighted_data)
             
             # Execute transform for all time steps at once
             output_gpu = plan.execute(data_gpu)
             
-            # Transfer back to CPU
-            image_stack[:, fi, :, :] = xp.asnumpy(output_gpu)
+            # Transfer back to CPU, reshape, and store results
+            image_stack[:, fi, :, :] = np.transpose(xp.asnumpy(output_gpu), axes=(0, 2, 1))
             
         else:
             # CPU version
@@ -144,14 +144,14 @@ def snapshot_imager_type1(
             weighted_data = prepare_weighted_visibilities(
                 imaging_data.vis,
                 imaging_data.weights,
-                fi
+                freq_idx=fi
             )
             
             # Execute transform
             output = plan.execute(weighted_data)
             
-            # Store results
-            image_stack[:, fi, :, :] = output
+            # Store results, Type 1 is transposed compared to Type 3
+            image_stack[:, fi, :, :] = np.transpose(output, axes=(0, 2, 1))
     
     return ImageResult(
         images=image_stack,
@@ -221,6 +221,9 @@ def snapshot_imager_type3(
     lcoords, mcoords, lgrid, mgrid = compute_image_grid(npix, fov)
     lgrid_flat = np.ravel(lgrid)
     mgrid_flat = np.ravel(mgrid)
+
+    # Get maximum grid extent for scaling
+    l_max = np.max([np.abs(lgrid_flat).max(), np.abs(mgrid_flat).max()])
     
     # Get maximum baseline extent for scaling
     umax = max(np.max(np.abs(imaging_data.u)), np.max(np.abs(imaging_data.v)))
@@ -230,7 +233,7 @@ def snapshot_imager_type3(
     mgrid_scaled = mgrid_flat * umax
     
     # Normalization factor
-    norm_factor = 2 * np.pi / umax
+    norm_factor = 4 * np.pi / umax * l_max
     
     # Number of output points
     n_out = npix * npix
@@ -267,7 +270,7 @@ def snapshot_imager_type3(
             weighted_data = prepare_weighted_visibilities(
                 imaging_data.vis,
                 imaging_data.weights,
-                fi
+                freq_idx=fi
             )
             data_gpu = xp.asarray(weighted_data)
             
@@ -295,7 +298,7 @@ def snapshot_imager_type3(
             weighted_data = prepare_weighted_visibilities(
                 imaging_data.vis,
                 imaging_data.weights,
-                fi
+                freq_idx=fi
             )
             
             # Execute transform
@@ -374,6 +377,9 @@ def snapshot_imager_mfs(
     lcoords, mcoords, lgrid, mgrid = compute_image_grid(npix, fov)
     lgrid_flat = np.ravel(lgrid)
     mgrid_flat = np.ravel(mgrid)
+
+    # Get maximum grid extent for scaling
+    l_max = np.max([np.abs(lgrid_flat).max(), np.abs(mgrid_flat).max()])
     
     # Get maximum baseline extent for scaling
     umax = max(np.max(np.abs(imaging_data.u)), np.max(np.abs(imaging_data.v)))
@@ -383,7 +389,7 @@ def snapshot_imager_mfs(
     mgrid_scaled = mgrid_flat * umax
     
     # Normalization factor
-    norm_factor = 2 * np.pi / umax
+    norm_factor = 4 * np.pi / umax * l_max
     
     # Number of output points
     n_out = npix * npix
@@ -420,17 +426,17 @@ def snapshot_imager_mfs(
             weighted_data = prepare_weighted_visibilities(
                 imaging_data.vis,
                 imaging_data.weights,
-                ti
+                time_idx=ti
             )
-            data_gpu = xp.asarray(np.ravel(weighted_data))
+            data_gpu = xp.asarray(xp.ravel(weighted_data))
 
             # Execute transform
             output_gpu = plan.execute(data_gpu)
             
             # Transfer back and reshape
-            # TODO: All frequencies are processed together, so we need to reshape correctly
+            # All frequencies are processed together, so we need to reshape correctly
             output_cpu = xp.asnumpy(output_gpu)
-            image_stack[:, :, :, :] = output_cpu.reshape(nfreqs, npix, npix)
+            image_stack[ti, :, :, :] = output_cpu.reshape(nfreqs, npix, npix)
 
         else:
             # CPU version
@@ -449,15 +455,15 @@ def snapshot_imager_mfs(
             weighted_data = prepare_weighted_visibilities(
                 imaging_data.vis,
                 imaging_data.weights,
-                ti
+                time_idx=ti
             )
             
             # Execute transform
             output = plan.execute(np.ravel(weighted_data))
             
             # Reshape and store
-            # TODO: All frequencies are processed together, so we need to reshape correctly
-            image_stack[:, :, :, :] = output.reshape(nfreqs, npix, npix)
+            #All frequencies are processed together, so we need to reshape correctly
+            image_stack[ti, :, :, :] = output.reshape(nfreqs, npix, npix)
 
     return ImageResult(
         images=image_stack,
@@ -466,8 +472,3 @@ def snapshot_imager_mfs(
         fov=fov,
         npix=npix
     )
-
-
-# Backwards compatibility aliases
-snapshot_imager_single_frequency_type1 = snapshot_imager_type1
-snapshot_imager_single_frequency_type3 = snapshot_imager_type3
