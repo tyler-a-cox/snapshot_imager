@@ -28,10 +28,8 @@ from .core import (
 from .imager import (
     snapshot_imager_type1,
     snapshot_imager_type3,
-    snapshot_imager_mfs,
-    # Backwards compatibility
-    snapshot_imager_single_frequency_type1,
-    snapshot_imager_single_frequency_type3,
+    snapshot_imager_mfs_type_1,
+    snapshot_imager_mfs_type_3,
 )
 
 __version__ = "0.2.0"
@@ -53,8 +51,6 @@ __all__ = [
     # Imaging algorithms
     "snapshot_imager_type1",
     "snapshot_imager_type3",
-    "snapshot_imager_mfs",
-    # Backwards compatibility
-    "snapshot_imager_single_frequency_type1",
-    "snapshot_imager_single_frequency_type3",
+    "snapshot_imager_mfs_type_1",
+    "snapshot_imager_mfs_type_3",
 ]
