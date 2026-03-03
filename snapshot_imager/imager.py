@@ -24,6 +24,7 @@ def snapshot_imager_type1(
     eps: float = 1e-13,
     use_cupy: bool = False,
     modeord: int = 0,
+    verbose=True,
 ) -> ImageResult:
     """
     Snapshot imager using Type 1 NUFFT with plan reuse.
@@ -89,7 +90,7 @@ def snapshot_imager_type1(
     norm_factor = 4 * np.pi / umax * l_max
 
     # Process each frequency
-    for fi in tqdm.tqdm(range(nfreqs), desc="Imaging frequencies"):
+    for fi in tqdm.tqdm(range(nfreqs), desc="Imaging frequencies", disable=not verbose):
         # Get and scale UV coordinates for this frequency
         u_scaled = imaging_data.u[:, fi] * norm_factor
         v_scaled = imaging_data.v[:, fi] * norm_factor
@@ -102,7 +103,7 @@ def snapshot_imager_type1(
             # Create Type 1 plan
             plan = nufft_lib.Plan(
                 nufft_type=1,
-                n_modes=(npix, npix),
+                n_modes_or_dim=(npix, npix),
                 n_trans=ntimes,
                 eps=eps,
                 dtype=xp.complex64 if imaging_data.vis.dtype == np.complex64 else xp.complex128,
@@ -130,7 +131,7 @@ def snapshot_imager_type1(
             # CPU version
             plan = nufft_lib.Plan(
                 nufft_type=1,
-                n_modes=(npix, npix),
+                n_modes_or_dim=(npix, npix),
                 n_trans=ntimes,
                 eps=eps,
                 dtype=np.complex64 if imaging_data.vis.dtype == np.complex64 else np.complex128,
@@ -168,6 +169,7 @@ def snapshot_imager_type3(
     fov: float = 180,
     eps: float = 1e-13,
     use_cupy: bool = False,
+    verbose=True,
 ) -> ImageResult:
     """
     Snapshot imager using Type 3 NUFFT with plan reuse.
@@ -239,7 +241,7 @@ def snapshot_imager_type3(
     image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)
     
     # Process each frequency
-    for fi in tqdm.tqdm(range(nfreqs), desc="Imaging frequencies"):
+    for fi in tqdm.tqdm(range(nfreqs), desc="Imaging frequencies", disable=not verbose):
         # Scale UV coordinates for this frequency
         u_scaled = imaging_data.u[:, fi] * norm_factor
         v_scaled = imaging_data.v[:, fi] * norm_factor
@@ -318,6 +320,7 @@ def snapshot_imager_mfs_type_1(
     fov: float = 10,
     eps: float = 1e-13,
     use_cupy: bool = False,
+    verbose=True,
 ) -> ImageResult:
     """
     Multi-frequency synthesis (MFS) snapshot imager using Type 3 NUFFT with plan reuse.
@@ -391,7 +394,7 @@ def snapshot_imager_mfs_type_1(
     image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)
     
     # Process each frequency
-    for ti in tqdm.tqdm(range(ntimes), desc="Imaging Times"):
+    for ti in tqdm.tqdm(range(ntimes), desc="Imaging Times", disable=not verbose):
         # Scale UV coordinates for this frequency
         u_scaled = np.ravel(imaging_data.u * norm_factor)
         v_scaled = np.ravel(imaging_data.v * norm_factor)
@@ -474,6 +477,7 @@ def snapshot_imager_mfs_type_3(
     fov: float = 10,
     eps: float = 1e-13,
     use_cupy: bool = False,
+    verbose=True,
 ) -> ImageResult:
     """
     Multi-frequency synthesis (MFS) snapshot imager using Type 3 NUFFT with plan reuse.
@@ -544,7 +548,7 @@ def snapshot_imager_mfs_type_3(
     image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)
     
     # Process each frequency
-    for ti in tqdm.tqdm(range(ntimes), desc="Imaging Times"):
+    for ti in tqdm.tqdm(range(ntimes), desc="Imaging Times", disable=not verbose):
         # Scale UV coordinates for this frequency
         u_scaled = np.ravel(imaging_data.u * norm_factor)
         v_scaled = np.ravel(imaging_data.v * norm_factor)
