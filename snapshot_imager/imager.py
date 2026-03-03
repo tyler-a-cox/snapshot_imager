@@ -86,8 +86,9 @@ def snapshot_imager_type1(
     
     # Compute the normalization factor for Type 1 NUFFT
     umax = max(np.max(np.abs(imaging_data.u)), np.max(np.abs(imaging_data.v)))
-    l_max = np.max([np.abs(lcoords).max(), np.abs(mcoords).max()])
-    norm_factor = 4 * np.pi / umax * l_max
+    l_max = np.sin(np.deg2rad(fov / 2))
+    # l_max = np.max([np.abs(lcoords).max(), np.abs(mcoords).max()])
+    norm_factor = 4 * np.pi / npix * l_max
 
     # Process each frequency
     for fi in tqdm.tqdm(range(nfreqs), desc="Imaging frequencies", disable=not verbose):
@@ -388,7 +389,7 @@ def snapshot_imager_mfs_type_1(
     mgrid_scaled = mgrid_flat * umax
     
     # Normalization factor
-    norm_factor = 4 * np.pi / umax * l_max
+    norm_factor = 4 * np.pi / npix * l_max
         
     # Pre-allocate output array
     image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)

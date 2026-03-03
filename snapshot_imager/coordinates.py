@@ -103,7 +103,7 @@ def phase_track_to_source(
     return vis * phase
 
 
-def compute_image_grid(npix: int, fov: float):
+def compute_image_grid(npix: int, fov: float, flat_projection: bool = True):
     """
     Compute the l, m coordinate grid for an image.
     
@@ -133,9 +133,15 @@ def compute_image_grid(npix: int, fov: float):
     
     where θ_E and θ_N are angular offsets in the East and North directions.
     """
-    extent = np.sin(np.deg2rad(fov / 2))
-    lcoords = np.linspace(-extent, extent, npix)
-    mcoords = np.linspace(-extent, extent, npix)
+    if flat_projection:
+        extent = np.sin(np.deg2rad(fov / 2))
+        lcoords = np.linspace(-extent, extent, npix, endpoint=False)
+        mcoords = np.linspace(-extent, extent, npix, endpoint=False)
+    else:
+        extent = np.deg2rad(fov / 2)
+        lcoords = np.sin(np.linspace(-extent, extent, npix, endpoint=False))
+        mcoords = np.sin(np.linspace(-extent, extent, npix, endpoint=False))
+    
     lgrid, mgrid = np.meshgrid(lcoords, mcoords)
     
     return lcoords, mcoords, lgrid, mgrid
