@@ -21,7 +21,6 @@ from .coordinates import (
 # Core utilities
 from .core import (
     get_nufft_library,
-    scale_uv_coordinates,
     estimate_memory_requirements,
 )
 
@@ -50,7 +49,6 @@ __all__ = [
     "compute_baseline_extent",
     # Core utilities
     "get_nufft_library",
-    "scale_uv_coordinates",
     "estimate_memory_requirements",
     # Imaging algorithms
     "snapshot_imager_type1",
