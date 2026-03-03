@@ -102,10 +102,7 @@ def test_type1_imager():
     assert result.fov == 10.0
     assert len(result.l_coords) == 32
     assert len(result.m_coords) == 32
-    
-    # Test get_stokes_i
-    stokes_i = result.get_stokes_i(0, 0)
-    assert stokes_i.shape == (32, 32)
+
     
     print("✓ Type 1 imager works correctly")
 

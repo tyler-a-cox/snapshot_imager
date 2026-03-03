@@ -56,50 +56,6 @@ def get_nufft_library(use_cupy: bool = False):
     
     return xp, nufft_lib, use_gpu
 
-
-def scale_uv_coordinates(
-    u: np.ndarray,
-    v: np.ndarray,
-    npix: int,
-    normalization: str = 'type1'
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Scale UV coordinates for NUFFT operations.
-    
-    Parameters
-    ----------
-    u : np.ndarray
-        U-coordinates in wavelengths
-    v : np.ndarray
-        V-coordinates in wavelengths
-    npix : int
-        Number of pixels in the image
-    normalization : str, optional
-        Normalization scheme: 'type1' or 'type3'. Default is 'type1'.
-    
-    Returns
-    -------
-    u_scaled : np.ndarray
-        Scaled U-coordinates
-    v_scaled : np.ndarray
-        Scaled V-coordinates
-    
-    Notes
-    -----
-    Type 1 NUFFT uses: uv_scale = 4π / npix
-    Type 3 NUFFT uses: uv_scale = 2π / umax
-    """
-    if normalization == 'type1':
-        uv_scale = 4 * np.pi / npix
-        return u * uv_scale, v * uv_scale
-    elif normalization == 'type3':
-        umax = max(np.max(np.abs(u)), np.max(np.abs(v)))
-        uv_scale = 2 * np.pi / umax
-        return u * uv_scale, v * uv_scale
-    else:
-        raise ValueError(f"Unknown normalization: {normalization}")
-
-
 def prepare_weighted_visibilities(
     vis: np.ndarray,
     weights: np.ndarray,

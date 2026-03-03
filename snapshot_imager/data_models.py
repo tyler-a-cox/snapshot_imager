@@ -135,28 +135,3 @@ class ImageResult:
     def nfreqs(self):
         """Number of frequency channels."""
         return self.images.shape[1]
-    
-    def get_stokes_i(self, time_idx: Optional[int] = None, freq_idx: Optional[int] = None):
-        """
-        Get Stokes I (intensity) image.
-        
-        Parameters
-        ----------
-        time_idx : int, optional
-            Time index. If None, returns all times.
-        freq_idx : int, optional
-            Frequency index. If None, returns all frequencies.
-        
-        Returns
-        -------
-        np.ndarray
-            Stokes I image(s)
-        """
-        if time_idx is not None and freq_idx is not None:
-            return np.abs(self.images[time_idx, freq_idx])
-        elif time_idx is not None:
-            return np.abs(self.images[time_idx])
-        elif freq_idx is not None:
-            return np.abs(self.images[:, freq_idx])
-        else:
-            return np.abs(self.images)

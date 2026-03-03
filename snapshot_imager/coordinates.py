@@ -93,7 +93,7 @@ def phase_track_to_source(
     # 2. Baseline convention (antenna1 - antenna2 vs antenna2 - antenna1)
     # 3. Sign conventions in the Fourier transform
     phase = np.exp(
-        -2j * np.pi * (
+        -4j * np.pi * (
             ucoords[:, None, :] * l[None, :, None] + 
             vcoords[:, None, :] * m[None, :, None] + 
             wcoords[:, None, :] * (n[None, :, None] - 1.0)
