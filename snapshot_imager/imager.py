@@ -124,9 +124,22 @@ def snapshot_imager_type1(
             
             # Execute transform for all time steps at once
             output_gpu = plan.execute(data_gpu)
+
+            
+            # Prepare weighted data for all times
+            weights = prepare_weighted_visibilities(
+                np.ones_like(imaging_data.vis),
+                imaging_data.weights,
+                freq_idx=fi
+            )
+            wgts_gpu = xp.asarray(weights)
+            
+            # Execute transform for all time steps at once
+            wgts_output_gpu = plan.execute(wgts_gpu)
+            norm = wgts_output_gpu.real.max()
             
             # Transfer back to CPU, reshape, and store results
-            image_stack[:, fi, :, :] = np.transpose(xp.asnumpy(output_gpu), axes=(0, 2, 1))
+            image_stack[:, fi, :, :] = np.transpose(xp.asnumpy(output_gpu / norm), axes=(0, 2, 1))
             
         else:
             # CPU version
@@ -151,7 +164,19 @@ def snapshot_imager_type1(
             
             # Execute transform
             output = plan.execute(weighted_data)
+
+            # Prepare weighted data for all times
+            weights = prepare_weighted_visibilities(
+                np.ones_like(imaging_data.vis),
+                imaging_data.weights,
+                freq_idx=fi
+            )
             
+            # Execute transform
+            wgts_output = plan.execute(weights)
+            norm = wgts_output.real.max()
+            output /= norm
+
             # Store results, Type 1 is transposed compared to Type 3
             image_stack[:, fi, :, :] = np.transpose(output, axes=(0, 2, 1))
     
@@ -273,12 +298,24 @@ def snapshot_imager_type3(
                 freq_idx=fi
             )
             data_gpu = xp.asarray(weighted_data)
-            
+
             # Execute transform
             output_gpu = plan.execute(data_gpu)
+
+            # Prepare weighted data
+            weights = prepare_weighted_visibilities(
+                np.ones_like(imaging_data.vis),
+                imaging_data.weights,
+                freq_idx=fi
+            )
+            wgts_gpu = xp.asarray(weights)
+
+            # Execute transform
+            wgts_output_gpu = plan.execute(wgts_gpu)
+            norm = wgts_output_gpu.real.max()
             
             # Transfer back and reshape
-            output_cpu = xp.asnumpy(output_gpu)
+            output_cpu = xp.asnumpy(output_gpu / norm)
             image_stack[:, fi, :, :] = output_cpu.reshape(ntimes, npix, npix)
             
         else:
@@ -300,9 +337,18 @@ def snapshot_imager_type3(
                 imaging_data.weights,
                 freq_idx=fi
             )
-            
             # Execute transform
             output = plan.execute(weighted_data)
+
+            # Prepare weighted data
+            weights = prepare_weighted_visibilities(
+                np.ones_like(imaging_data.vis),
+                imaging_data.weights,
+                freq_idx=fi
+            )
+            # Execute transform
+            wgts_output = plan.execute(weights)
+            output /= wgts_output.real.max()  # Normalize by max weight response
             
             # Reshape and store
             image_stack[:, fi, :, :] = output.reshape(ntimes, npix, npix)
