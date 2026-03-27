@@ -25,6 +25,7 @@ def snapshot_imager_type1(
     use_cupy: bool = False,
     modeord: int = 0,
     verbose=True,
+    rm_phasor: np.ndarray = None,
 ) -> ImageResult:
     """
     Snapshot imager using Type 1 NUFFT with plan reuse.
@@ -48,6 +49,10 @@ def snapshot_imager_type1(
     modeord : int, optional
         Mode ordering: 0 for FINUFFT default (fftshift), 1 for FFT-style.
         Default is 0.
+    rm_phasor : np.ndarray, optional
+        Optional array of shape (nfreqs,) containing phasor values to remove
+        from the visibilities before imaging. If provided, the phasor will be
+        divided out from the visibilities for each frequency channel. Default is None.
     
     Returns
     -------
@@ -82,8 +87,11 @@ def snapshot_imager_type1(
     lcoords, mcoords, _, _ = compute_image_grid(npix, fov)
     
     # Pre-allocate output array
-    image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)
-    
+    if rm_phasor is not None:
+        image_stack = np.zeros((ntimes, 1, npix, npix), dtype=complex)
+    else:
+        image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)
+
     # Compute the normalization factor for Type 1 NUFFT
     umax = max(np.max(np.abs(imaging_data.u)), np.max(np.abs(imaging_data.v)))
     l_max = np.sin(np.deg2rad(fov / 2))
@@ -176,9 +184,13 @@ def snapshot_imager_type1(
             wgts_output = plan.execute(weights)
             norm = wgts_output.real.max()
             output /= norm
+            output = np.where(np.isfinite(output), output, 0)  # Handle any NaNs/Infs
 
             # Store results, Type 1 is transposed compared to Type 3
-            image_stack[:, fi, :, :] = np.transpose(output, axes=(0, 2, 1))
+            if rm_phasor is not None:
+                image_stack[:, 0, :, :] += np.transpose(output, axes=(0, 2, 1)) * rm_phasor[fi]
+            else:
+                image_stack[:, fi, :, :] = np.transpose(output, axes=(0, 2, 1))
     
     return ImageResult(
         images=image_stack,
