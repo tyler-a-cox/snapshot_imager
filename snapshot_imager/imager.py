@@ -103,8 +103,8 @@ def snapshot_imager_type1(
             
             # Create Type 1 plan
             plan = nufft_lib.Plan(
-                nufft_type=1,
-                n_modes_or_dim=(npix, npix),
+                1,
+                (npix, npix),
                 n_trans=ntimes,
                 eps=eps,
                 dtype=xp.complex64 if imaging_data.vis.dtype == np.complex64 else xp.complex128,
@@ -144,8 +144,8 @@ def snapshot_imager_type1(
         else:
             # CPU version
             plan = nufft_lib.Plan(
-                nufft_type=1,
-                n_modes_or_dim=(npix, npix),
+                1,
+                (npix, npix),
                 n_trans=ntimes,
                 eps=eps,
                 dtype=np.complex64 if imaging_data.vis.dtype == np.complex64 else np.complex128,
