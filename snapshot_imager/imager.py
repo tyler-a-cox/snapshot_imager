@@ -183,8 +183,13 @@ def snapshot_imager_type1(
             # Execute transform
             wgts_output = plan.execute(weights)
             norm = wgts_output.real.max()
-            output /= norm
-            output = np.where(np.isfinite(output), output, 0)  # Handle any NaNs/Infs
+            
+            output = np.divide(
+                output,
+                norm,
+                out=np.zeros_like(output),   # what to put where division is skipped
+                where=norm != 0
+            )
 
             # Store results, Type 1 is transposed compared to Type 3
             if rm_phasor is not None:
