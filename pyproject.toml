@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "snapshot_imager"
-version = "0.1.0"
+version = "0.2.0"
 description = "Simple python package for imaging visibility data"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,6 +32,8 @@ dependencies = [
     "numpy",
     "astropy",
     "finufft",
+    "tqdm",
+    "hera_cal",
 ]
 
 [project.optional-dependencies]
@@ -78,7 +80,7 @@ python_functions = ["test_*"]
 
 [tool.black]
 line-length = 88
-target-version = ["py38", "py39", "py310", "py311"]
+target-version = ["py310", "py311", "py312"]
 include = '\.pyi?$'
 extend-exclude = '''
 /(

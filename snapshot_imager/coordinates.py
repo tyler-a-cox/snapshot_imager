@@ -52,14 +52,9 @@ def phase_track_to_source(
     - l: East direction cosine
     - m: North direction cosine  
     - n: Up direction cosine (computed from l² + m² + n² = 1)
-    
-    WARNING: There is a known issue with the phase factor. The correct formula
-    should use -2j * π, but -4j * π appears to work in practice. This needs
-    investigation and likely relates to how UVW coordinates are defined or
-    computed upstream.
-    
+        
     The phase correction applied is:
-        exp(-2j * π * (u*l + v*m + w*(n-1)))
+        exp(-2j * π * (u*l + v*m + w*n))
     
     where (u, v, w) are baseline coordinates in wavelengths and (l, m, n) are
     direction cosines to the source.
@@ -87,16 +82,11 @@ def phase_track_to_source(
     wcoords = uvw[:, 2, :]  # Shape: (nbls, nfreqs)
     
     # Compute phase correction
-    # NOTE: This should be -2j * pi according to theory, but -4j * pi works
-    # This discrepancy needs investigation - it may be related to:
-    # 1. How UVW coordinates are computed in preprocessing
-    # 2. Baseline convention (antenna1 - antenna2 vs antenna2 - antenna1)
-    # 3. Sign conventions in the Fourier transform
     phase = np.exp(
-        -4j * np.pi * (
+        -2j * np.pi * (
             ucoords[:, None, :] * l[None, :, None] + 
             vcoords[:, None, :] * m[None, :, None] + 
-            wcoords[:, None, :] * (n[None, :, None] - 1.0)
+            wcoords[:, None, :] * n[None, :, None]
         )
     )
     
@@ -113,6 +103,11 @@ def compute_image_grid(npix: int, fov: float, flat_projection: bool = True):
         Number of pixels per dimension
     fov : float
         Field of view in degrees
+    flat_projection : bool, optional
+        If True (default), use a flat/orthographic projection where coordinates
+        are spaced uniformly in direction cosine space. If False, space angles
+        uniformly and then take the sine, which more accurately represents
+        the sphere for wide fields of view.
     
     Returns
     -------

@@ -9,6 +9,7 @@ interferometry data using Non-Uniform Fast Fourier Transforms (NUFFT).
 from .data_models import ImagingData, ImageResult
 
 # Preprocessing
+# Note: unpack_uvdata is exported but raises NotImplementedError until implemented.
 from .preprocessing import unpack_data_containers, unpack_uvdata
 
 # Coordinate transformations

@@ -93,9 +93,7 @@ def snapshot_imager_type1(
         image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)
 
     # Compute the normalization factor for Type 1 NUFFT
-    umax = max(np.max(np.abs(imaging_data.u)), np.max(np.abs(imaging_data.v)))
     l_max = np.sin(np.deg2rad(fov / 2))
-    # l_max = np.max([np.abs(lcoords).max(), np.abs(mcoords).max()])
     norm_factor = 4 * np.pi / npix * l_max
 
     # Process each frequency
@@ -133,21 +131,30 @@ def snapshot_imager_type1(
             # Execute transform for all time steps at once
             output_gpu = plan.execute(data_gpu)
 
-            
-            # Prepare weighted data for all times
-            weights = prepare_weighted_visibilities(
+            # Compute weight normalisation
+            norm_weights = prepare_weighted_visibilities(
                 np.ones_like(imaging_data.vis),
                 imaging_data.weights,
                 freq_idx=fi
             )
-            wgts_gpu = xp.asarray(weights)
+            wgts_gpu = xp.asarray(norm_weights)
             
             # Execute transform for all time steps at once
             wgts_output_gpu = plan.execute(wgts_gpu)
             norm = wgts_output_gpu.real.max()
             
             # Transfer back to CPU, reshape, and store results
-            image_stack[:, fi, :, :] = np.transpose(xp.asnumpy(output_gpu / norm), axes=(0, 2, 1))
+            output_cpu = np.transpose(xp.asnumpy(output_gpu), axes=(0, 2, 1))
+            output_cpu = np.divide(
+                output_cpu,
+                norm,
+                out=np.zeros_like(output_cpu),
+                where=norm != 0
+            )
+            if rm_phasor is not None:
+                image_stack[:, 0, :, :] += output_cpu * rm_phasor[fi]
+            else:
+                image_stack[:, fi, :, :] = output_cpu
             
         else:
             # CPU version
@@ -173,21 +180,21 @@ def snapshot_imager_type1(
             # Execute transform
             output = plan.execute(weighted_data)
 
-            # Prepare weighted data for all times
-            weights = prepare_weighted_visibilities(
+            # Compute weight normalisation
+            norm_weights = prepare_weighted_visibilities(
                 np.ones_like(imaging_data.vis),
                 imaging_data.weights,
                 freq_idx=fi
             )
             
             # Execute transform
-            wgts_output = plan.execute(weights)
+            wgts_output = plan.execute(norm_weights)
             norm = wgts_output.real.max()
             
             output = np.divide(
                 output,
                 norm,
-                out=np.zeros_like(output),   # what to put where division is skipped
+                out=np.zeros_like(output),
                 where=norm != 0
             )
 
@@ -277,9 +284,6 @@ def snapshot_imager_type3(
     # Normalization factor
     norm_factor = 2 * np.pi / umax
     
-    # Number of output points
-    n_out = npix * npix
-    
     # Pre-allocate output array
     image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)
     
@@ -365,7 +369,13 @@ def snapshot_imager_type3(
             )
             # Execute transform
             wgts_output = plan.execute(weights)
-            output /= wgts_output.real.max()  # Normalize by max weight response
+            norm = wgts_output.real.max()
+            output = np.divide(
+                output,
+                norm,
+                out=np.zeros_like(output),
+                where=norm != 0
+            )
             
             # Reshape and store
             image_stack[:, fi, :, :] = output.reshape(ntimes, npix, npix)
@@ -387,11 +397,11 @@ def snapshot_imager_mfs_type_1(
     verbose=True,
 ) -> ImageResult:
     """
-    Multi-frequency synthesis (MFS) snapshot imager using Type 3 NUFFT with plan reuse.
+    Multi-frequency synthesis (MFS) snapshot imager using Type 1 NUFFT with plan reuse.
     
-    This implementation uses FINUFFT plans for efficient Type 3 NUFFT computation,
-    processing all time samples together using the n_trans parameter. Supports
-    optional GPU acceleration via CuPy/cuFINUFFT.
+    This implementation uses FINUFFT plans for efficient Type 1 NUFFT computation,
+    processing all baselines across all frequencies together for each time step.
+    Supports optional GPU acceleration via CuPy/cuFINUFFT.
     
     Parameters
     ----------

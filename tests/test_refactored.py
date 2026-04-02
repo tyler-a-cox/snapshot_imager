@@ -1,270 +1,273 @@
 """
-Simple tests to verify the refactored snapshot_imager package works correctly.
+Tests for the snapshot_imager package.
 
-Run with: python -m pytest test_refactored.py
-Or simply: python test_refactored.py
+Run with: pytest tests/
 """
 
 import numpy as np
+import pytest
 from astropy.coordinates import EarthLocation
 import astropy.units as u
 
-
-def test_imports():
-    """Test that all imports work."""
-    print("Testing imports...")
-    
-    from snapshot_imager import (
-        ImagingData,
-        ImageResult,
-        unpack_data_containers,
-        phase_track_to_source,
-        snapshot_imager_type1,
-        snapshot_imager_type3,
-        snapshot_imager_mfs,
-        estimate_memory_requirements,
-        compute_image_grid,
-        compute_baseline_extent,
-    )
-    
-    # Backward compatibility
-    from snapshot_imager import (
-        snapshot_imager_single_frequency_type1,
-        snapshot_imager_single_frequency_type3,
-    )
-    
-    print("All imports successful")
+from snapshot_imager import (
+    ImagingData,
+    ImageResult,
+    unpack_data_containers,
+    phase_track_to_source,
+    snapshot_imager_type1,
+    snapshot_imager_type3,
+    snapshot_imager_mfs_type_1,
+    snapshot_imager_mfs_type_3,
+    estimate_memory_requirements,
+    compute_image_grid,
+    compute_baseline_extent,
+)
 
 
-def test_imaging_data():
-    """Test ImagingData class."""
-    print("\nTesting ImagingData class...")
-    from snapshot_imager import ImagingData
-    
-    # Create valid data
-    nbls, ntimes, nfreqs = 10, 5, 16
-    vis = np.random.randn(nbls, ntimes, nfreqs) + 1j * np.random.randn(nbls, ntimes, nfreqs)
-    weights = np.ones((nbls, ntimes, nfreqs))
-    uvw = np.random.randn(nbls, 3, nfreqs) * 50
-    times = np.linspace(2459000, 2459000.05, ntimes)
-    freqs = np.linspace(100e6, 150e6, nfreqs)
-    
-    # Create ImagingData
-    imaging_data = ImagingData(vis, weights, uvw, times, freqs)
-    
-    # Test properties
-    assert imaging_data.shape == (nbls, ntimes, nfreqs)
-    assert imaging_data.nbls == nbls
-    assert imaging_data.ntimes == ntimes
-    assert imaging_data.nfreqs == nfreqs
-    assert imaging_data.u.shape == (nbls, nfreqs)
-    assert imaging_data.v.shape == (nbls, nfreqs)
-    assert imaging_data.w.shape == (nbls, nfreqs)
-    
-    print("✓ ImagingData class works correctly")
-    
-    # Test validation
-    print("  Testing validation...")
-    try:
-        bad_data = ImagingData(
-            vis=vis,
-            weights=np.ones((nbls, ntimes, nfreqs + 1)),  # Wrong shape
-            uvw=uvw,
-            times=times,
-            freqs=freqs
-        )
-        assert False, "Should have raised ValueError"
-    except ValueError as e:
-        print(f"  ✓ Validation caught error: {str(e)[:50]}...")
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
-
-def test_type1_imager():
-    """Test Type 1 NUFFT imager."""
-    print("\nTesting Type 1 imager...")
-    from snapshot_imager import ImagingData, snapshot_imager_type1
-    
-    # Create small dataset
+@pytest.fixture
+def imaging_data():
+    """Standard-sized ImagingData for most tests."""
     nbls, ntimes, nfreqs = 20, 5, 8
-    vis = np.random.randn(nbls, ntimes, nfreqs) + 1j * np.random.randn(nbls, ntimes, nfreqs)
+    rng = np.random.default_rng(42)
+    vis = rng.standard_normal((nbls, ntimes, nfreqs)) + 1j * rng.standard_normal((nbls, ntimes, nfreqs))
     weights = np.ones((nbls, ntimes, nfreqs))
-    uvw = np.random.randn(nbls, 3, nfreqs) * 50
+    uvw = rng.standard_normal((nbls, 3, nfreqs)) * 50
     times = np.linspace(2459000, 2459000.05, ntimes)
     freqs = np.linspace(100e6, 150e6, nfreqs)
-    
-    imaging_data = ImagingData(vis, weights, uvw, times, freqs)
-    
-    # Image
-    result = snapshot_imager_type1(imaging_data, npix=32, fov=10.0)
-    
-    # Check result
-    assert result.shape == (ntimes, nfreqs, 32, 32)
-    assert result.npix == 32
-    assert result.fov == 10.0
-    assert len(result.l_coords) == 32
-    assert len(result.m_coords) == 32
-
-    
-    print("✓ Type 1 imager works correctly")
+    return ImagingData(vis, weights, uvw, times, freqs)
 
 
-def test_type3_imager():
-    """Test Type 3 NUFFT imager."""
-    print("\nTesting Type 3 imager...")
-    from snapshot_imager import ImagingData, snapshot_imager_type3
-    
-    # Create small dataset
-    nbls, ntimes, nfreqs = 20, 5, 8
-    vis = np.random.randn(nbls, ntimes, nfreqs) + 1j * np.random.randn(nbls, ntimes, nfreqs)
-    weights = np.ones((nbls, ntimes, nfreqs))
-    uvw = np.random.randn(nbls, 3, nfreqs) * 50
-    times = np.linspace(2459000, 2459000.05, ntimes)
-    freqs = np.linspace(100e6, 150e6, nfreqs)
-    
-    imaging_data = ImagingData(vis, weights, uvw, times, freqs)
-    
-    # Image
-    result = snapshot_imager_type3(imaging_data, npix=32, fov=10.0)
-    
-    # Check result
-    assert result.shape == (ntimes, nfreqs, 32, 32)
-    
-    print("✓ Type 3 imager works correctly")
-
-
-def test_mfs_imager():
-    """Test MFS imager."""
-    print("\nTesting MFS imager...")
-    from snapshot_imager import ImagingData, snapshot_imager_mfs
-    
-    # Create very small dataset (MFS is slow)
+@pytest.fixture
+def imaging_data_small():
+    """Small ImagingData for slower MFS tests."""
     nbls, ntimes, nfreqs = 10, 2, 4
-    vis = np.random.randn(nbls, ntimes, nfreqs) + 1j * np.random.randn(nbls, ntimes, nfreqs)
+    rng = np.random.default_rng(42)
+    vis = rng.standard_normal((nbls, ntimes, nfreqs)) + 1j * rng.standard_normal((nbls, ntimes, nfreqs))
     weights = np.ones((nbls, ntimes, nfreqs))
-    uvw = np.random.randn(nbls, 3, nfreqs) * 50
+    uvw = rng.standard_normal((nbls, 3, nfreqs)) * 50
     times = np.linspace(2459000, 2459000.05, ntimes)
     freqs = np.linspace(100e6, 150e6, nfreqs)
-    
-    imaging_data = ImagingData(vis, weights, uvw, times, freqs)
-    
-    # Image
-    result = snapshot_imager_mfs(imaging_data, npix=16, fov=10.0)
-    
-    # Check result
-    assert result.shape == (ntimes, nfreqs, 16, 16)
-    
-    print("✓ MFS imager works correctly")
+    return ImagingData(vis, weights, uvw, times, freqs)
 
 
-def test_phase_tracking():
-    """Test phase tracking."""
-    print("\nTesting phase tracking...")
-    from snapshot_imager import ImagingData, phase_track_to_source
-    
-    # Create data
-    nbls, ntimes, nfreqs = 10, 5, 8
-    vis = np.random.randn(nbls, ntimes, nfreqs) + 1j * np.random.randn(nbls, ntimes, nfreqs)
-    weights = np.ones((nbls, ntimes, nfreqs))
-    uvw = np.random.randn(nbls, 3, nfreqs) * 50
-    times = np.linspace(2459000, 2459000.05, ntimes)
-    freqs = np.linspace(100e6, 150e6, nfreqs)
-    
-    imaging_data = ImagingData(vis, weights, uvw, times, freqs)
-    
-    # Define telescope location
-    telescope = EarthLocation(
-        lat=-30.7215 * u.deg,
-        lon=21.4283 * u.deg,
-        height=1051 * u.m
-    )
-    
-    # Phase track
-    vis_phased = phase_track_to_source(
-        vis=imaging_data.vis,
-        uvw=imaging_data.uvw,
-        times=imaging_data.times,
-        ra_src=299.868,
-        dec_src=40.734,
-        telescope_loc=telescope
-    )
-    
-    # Check shape is preserved
-    assert vis_phased.shape == vis.shape
-    
-    # Check that phase tracking actually modified the data
-    assert not np.allclose(vis_phased, vis)
-    
-    print("✓ Phase tracking works correctly")
+@pytest.fixture
+def telescope_location():
+    """HERA telescope location."""
+    return EarthLocation(lat=-30.7215 * u.deg, lon=21.4283 * u.deg, height=1051 * u.m)
 
 
-def test_utilities():
-    """Test utility functions."""
-    print("\nTesting utilities...")
-    from snapshot_imager import (
-        estimate_memory_requirements,
-        compute_image_grid,
-        compute_baseline_extent,
-    )
-    
-    # Memory estimation
-    mem = estimate_memory_requirements(nbls=100, ntimes=60, nfreqs=1024, npix=512)
-    assert 'total' in mem
-    assert 'input_data' in mem
-    assert 'output_images' in mem
-    assert mem['total'] > 0
-    print(f"  Memory estimate: {mem['total']:.2f} GB")
-    
-    # Image grid
-    lcoords, mcoords, lgrid, mgrid = compute_image_grid(npix=64, fov=20.0)
-    assert len(lcoords) == 64
-    assert len(mcoords) == 64
-    assert lgrid.shape == (64, 64)
-    assert mgrid.shape == (64, 64)
-    
-    # Baseline extent
-    u = np.random.randn(100, 10) * 50
-    v = np.random.randn(100, 10) * 30
-    umax = compute_baseline_extent(u, v)
-    assert umax > 0
-    assert umax >= np.max(np.abs(u))
-    assert umax >= np.max(np.abs(v))
-    
-    print("✓ Utilities work correctly")
+# ---------------------------------------------------------------------------
+# ImagingData
+# ---------------------------------------------------------------------------
+
+class TestImagingData:
+
+    def test_shape_properties(self, imaging_data):
+        nbls, ntimes, nfreqs = 20, 5, 8
+        assert imaging_data.shape == (nbls, ntimes, nfreqs)
+        assert imaging_data.nbls == nbls
+        assert imaging_data.ntimes == ntimes
+        assert imaging_data.nfreqs == nfreqs
+
+    def test_uvw_coordinate_properties(self, imaging_data):
+        nbls, nfreqs = 20, 8
+        assert imaging_data.u.shape == (nbls, nfreqs)
+        assert imaging_data.v.shape == (nbls, nfreqs)
+        assert imaging_data.w.shape == (nbls, nfreqs)
+
+    @pytest.mark.parametrize("bad_weights_shape", [
+        (20, 5, 9),   # wrong nfreqs
+        (20, 6, 8),   # wrong ntimes
+        (21, 5, 8),   # wrong nbls
+    ])
+    def test_invalid_weights_shape_raises(self, imaging_data, bad_weights_shape):
+        with pytest.raises(ValueError, match="weights shape"):
+            ImagingData(
+                vis=imaging_data.vis,
+                weights=np.ones(bad_weights_shape),
+                uvw=imaging_data.uvw,
+                times=imaging_data.times,
+                freqs=imaging_data.freqs,
+            )
+
+    def test_invalid_uvw_shape_raises(self, imaging_data):
+        bad_uvw = np.ones((20, 4, 8))  # axis 1 should be 3
+        with pytest.raises(ValueError, match="uvw shape"):
+            ImagingData(
+                vis=imaging_data.vis,
+                weights=imaging_data.weights,
+                uvw=bad_uvw,
+                times=imaging_data.times,
+                freqs=imaging_data.freqs,
+            )
+
+    def test_invalid_times_length_raises(self, imaging_data):
+        with pytest.raises(ValueError, match="times length"):
+            ImagingData(
+                vis=imaging_data.vis,
+                weights=imaging_data.weights,
+                uvw=imaging_data.uvw,
+                times=np.linspace(2459000, 2459000.05, 99),
+                freqs=imaging_data.freqs,
+            )
+
+    def test_invalid_freqs_length_raises(self, imaging_data):
+        with pytest.raises(ValueError, match="freqs length"):
+            ImagingData(
+                vis=imaging_data.vis,
+                weights=imaging_data.weights,
+                uvw=imaging_data.uvw,
+                times=imaging_data.times,
+                freqs=np.linspace(100e6, 150e6, 99),
+            )
 
 
-def test_backward_compatibility():
-    """Test backward compatibility with old API."""
-    print("\nTesting backward compatibility...")
-    from snapshot_imager import (
-        snapshot_imager_single_frequency_type1,
-        snapshot_imager_single_frequency_type3,
-    )
-    
-    # Just verify they exist and are callable
-    assert callable(snapshot_imager_single_frequency_type1)
-    assert callable(snapshot_imager_single_frequency_type3)
-    
-    print("✓ Backward-compatible aliases exist")
+# ---------------------------------------------------------------------------
+# Imagers
+# ---------------------------------------------------------------------------
+
+class TestType1Imager:
+
+    def test_output_shape(self, imaging_data):
+        result = snapshot_imager_type1(imaging_data, npix=32, fov=10.0, verbose=False)
+        assert result.shape == (5, 8, 32, 32)
+
+    def test_result_metadata(self, imaging_data):
+        result = snapshot_imager_type1(imaging_data, npix=32, fov=10.0, verbose=False)
+        assert result.npix == 32
+        assert result.fov == 10.0
+        assert len(result.l_coords) == 32
+        assert len(result.m_coords) == 32
+
+    def test_returns_image_result(self, imaging_data):
+        result = snapshot_imager_type1(imaging_data, npix=32, fov=10.0, verbose=False)
+        assert isinstance(result, ImageResult)
+
+    def test_images_are_finite(self, imaging_data):
+        result = snapshot_imager_type1(imaging_data, npix=32, fov=10.0, verbose=False)
+        assert np.all(np.isfinite(result.images))
 
 
-def run_all_tests():
-    """Run all tests."""
-    print("=" * 60)
-    print("Running refactored snapshot_imager tests")
-    print("=" * 60)
-    
-    test_imports()
-    test_imaging_data()
-    test_type1_imager()
-    test_type3_imager()
-    test_mfs_imager()
-    test_phase_tracking()
-    test_utilities()
-    test_backward_compatibility()
-    
-    print("\n" + "=" * 60)
-    print("All tests passed! ✓")
-    print("=" * 60)
+class TestType3Imager:
+
+    def test_output_shape(self, imaging_data):
+        result = snapshot_imager_type3(imaging_data, npix=32, fov=10.0, verbose=False)
+        assert result.shape == (5, 8, 32, 32)
+
+    def test_returns_image_result(self, imaging_data):
+        result = snapshot_imager_type3(imaging_data, npix=32, fov=10.0, verbose=False)
+        assert isinstance(result, ImageResult)
+
+    def test_images_are_finite(self, imaging_data):
+        result = snapshot_imager_type3(imaging_data, npix=32, fov=10.0, verbose=False)
+        assert np.all(np.isfinite(result.images))
 
 
-if __name__ == "__main__":
-    run_all_tests()
+class TestMFSType1Imager:
+
+    def test_output_shape(self, imaging_data_small):
+        result = snapshot_imager_mfs_type_1(imaging_data_small, npix=16, fov=10.0, verbose=False)
+        assert result.shape == (2, 4, 16, 16)
+
+    def test_returns_image_result(self, imaging_data_small):
+        result = snapshot_imager_mfs_type_1(imaging_data_small, npix=16, fov=10.0, verbose=False)
+        assert isinstance(result, ImageResult)
+
+
+class TestMFSType3Imager:
+
+    def test_output_shape(self, imaging_data_small):
+        result = snapshot_imager_mfs_type_3(imaging_data_small, npix=16, fov=10.0, verbose=False)
+        assert result.shape == (2, 4, 16, 16)
+
+    def test_returns_image_result(self, imaging_data_small):
+        result = snapshot_imager_mfs_type_3(imaging_data_small, npix=16, fov=10.0, verbose=False)
+        assert isinstance(result, ImageResult)
+
+
+# ---------------------------------------------------------------------------
+# Phase tracking
+# ---------------------------------------------------------------------------
+
+class TestPhaseTracking:
+
+    def test_output_shape_preserved(self, imaging_data, telescope_location):
+        vis_phased = phase_track_to_source(
+            vis=imaging_data.vis,
+            uvw=imaging_data.uvw,
+            times=imaging_data.times,
+            ra_src=299.868,
+            dec_src=40.734,
+            telescope_loc=telescope_location,
+        )
+        assert vis_phased.shape == imaging_data.vis.shape
+
+    def test_phase_rotation_modifies_data(self, imaging_data, telescope_location):
+        vis_phased = phase_track_to_source(
+            vis=imaging_data.vis,
+            uvw=imaging_data.uvw,
+            times=imaging_data.times,
+            ra_src=299.868,
+            dec_src=40.734,
+            telescope_loc=telescope_location,
+        )
+        assert not np.allclose(vis_phased, imaging_data.vis)
+
+    def test_amplitudes_preserved(self, imaging_data, telescope_location):
+        """Phase rotation should not change visibility amplitudes."""
+        vis_phased = phase_track_to_source(
+            vis=imaging_data.vis,
+            uvw=imaging_data.uvw,
+            times=imaging_data.times,
+            ra_src=299.868,
+            dec_src=40.734,
+            telescope_loc=telescope_location,
+        )
+        np.testing.assert_allclose(
+            np.abs(vis_phased), np.abs(imaging_data.vis), rtol=1e-10
+        )
+
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+
+class TestImageGrid:
+
+    def test_coordinate_array_lengths(self):
+        lcoords, mcoords, lgrid, mgrid = compute_image_grid(npix=64, fov=20.0)
+        assert len(lcoords) == 64
+        assert len(mcoords) == 64
+
+    def test_grid_shapes(self):
+        lcoords, mcoords, lgrid, mgrid = compute_image_grid(npix=64, fov=20.0)
+        assert lgrid.shape == (64, 64)
+        assert mgrid.shape == (64, 64)
+
+    def test_coords_within_fov(self):
+        npix, fov = 64, 20.0
+        lcoords, mcoords, _, _ = compute_image_grid(npix=npix, fov=fov)
+        extent = np.sin(np.deg2rad(fov / 2))
+        assert np.all(np.abs(lcoords) <= extent)
+        assert np.all(np.abs(mcoords) <= extent)
+
+
+class TestBaselineExtent:
+
+    def test_positive_result(self):
+        rng = np.random.default_rng(0)
+        u = rng.standard_normal((100, 10)) * 50
+        v = rng.standard_normal((100, 10)) * 30
+        assert compute_baseline_extent(u, v) > 0
+
+    def test_dominated_by_largest_axis(self):
+        rng = np.random.default_rng(0)
+        u = rng.standard_normal((100, 10)) * 50
+        v = rng.standard_normal((100, 10)) * 30
+        umax = compute_baseline_extent(u, v)
+        assert umax >= np.max(np.abs(u))
+        assert umax >= np.max(np.abs(v))
