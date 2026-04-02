@@ -33,7 +33,7 @@ dependencies = [
     "astropy",
     "finufft",
     "tqdm",
-    "hera_cal",
+    "hera-calibration",
 ]
 
 [project.optional-dependencies]

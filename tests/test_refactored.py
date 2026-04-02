@@ -170,8 +170,9 @@ class TestType3Imager:
 class TestMFSType1Imager:
 
     def test_output_shape(self, imaging_data_small):
+        # MFS collapses all frequencies into a single wideband image per time step
         result = snapshot_imager_mfs_type_1(imaging_data_small, npix=16, fov=10.0, verbose=False)
-        assert result.shape == (2, 4, 16, 16)
+        assert result.shape == (2, 1, 16, 16)
 
     def test_returns_image_result(self, imaging_data_small):
         result = snapshot_imager_mfs_type_1(imaging_data_small, npix=16, fov=10.0, verbose=False)
@@ -181,8 +182,9 @@ class TestMFSType1Imager:
 class TestMFSType3Imager:
 
     def test_output_shape(self, imaging_data_small):
+        # MFS collapses all frequencies into a single wideband image per time step
         result = snapshot_imager_mfs_type_3(imaging_data_small, npix=16, fov=10.0, verbose=False)
-        assert result.shape == (2, 4, 16, 16)
+        assert result.shape == (2, 1, 16, 16)
 
     def test_returns_image_result(self, imaging_data_small):
         result = snapshot_imager_mfs_type_3(imaging_data_small, npix=16, fov=10.0, verbose=False)

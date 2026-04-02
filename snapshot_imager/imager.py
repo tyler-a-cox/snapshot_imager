@@ -423,12 +423,10 @@ def snapshot_imager_mfs_type_1(
     
     Notes
     -----
-    Type 3 NUFFT transforms from non-uniform points to non-uniform points.
-    This implementation creates a plan for each frequency channel and processes
-    all time samples together for better efficiency.
-    
-    For regular output grids, consider snapshot_imager_type1 which is typically
-    faster than Type 3.
+    For each time step, all baselines across all frequency channels are
+    concatenated into a single set of non-uniform UV points, producing one
+    wideband MFS image. The output image cube has shape
+    (ntimes, 1, npix, npix).
     """
     # Validate inputs
     validate_imaging_inputs(
@@ -451,96 +449,64 @@ def snapshot_imager_mfs_type_1(
     lgrid_flat = np.ravel(lgrid)
     mgrid_flat = np.ravel(mgrid)
 
-    # Get maximum grid extent for scaling
-    l_max = np.max([np.abs(lgrid_flat).max(), np.abs(mgrid_flat).max()])
-    
-    # Get maximum baseline extent for scaling
-    umax = max(np.max(np.abs(imaging_data.u)), np.max(np.abs(imaging_data.v)))
-    
-    # Pre-compute grid coordinates scaled by umax
-    lgrid_scaled = lgrid_flat * umax
-    mgrid_scaled = mgrid_flat * umax
-    
     # Normalization factor
+    l_max = np.max([np.abs(lgrid_flat).max(), np.abs(mgrid_flat).max()])
     norm_factor = 4 * np.pi / npix * l_max
-        
-    # Pre-allocate output array
-    image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)
-    
-    # Process each frequency
+
+    # Pre-allocate output array: one MFS image per time step
+    image_stack = np.zeros((ntimes, 1, npix, npix), dtype=complex)
+
+    # Process each time step, combining all baselines and frequencies
     for ti in tqdm.tqdm(range(ntimes), desc="Imaging Times", disable=not verbose):
-        # Scale UV coordinates for this frequency
+        # Ravel UV coords across all baselines and frequencies
         u_scaled = np.ravel(imaging_data.u * norm_factor)
         v_scaled = np.ravel(imaging_data.v * norm_factor)
-        
+
+        # Prepare weighted data: shape (nfreqs, nbls) -> ravel to (nfreqs*nbls,)
+        weighted_data = prepare_weighted_visibilities(
+            imaging_data.vis,
+            imaging_data.weights,
+            time_idx=ti
+        )
+
         if use_gpu:
-            # Transfer coordinates to GPU once per frequency
             u_gpu = xp.asarray(u_scaled)
             v_gpu = xp.asarray(v_scaled)
-            lgrid_gpu = xp.asarray(lgrid_scaled)
-            mgrid_gpu = xp.asarray(mgrid_scaled)
-            
-            # Create Type 3 plan
+
             plan = nufft_lib.Plan(
-                nufft_type=1,
-                n_modes=(npix, npix),  # Dimension (2D transform)
+                1,
+                (npix, npix),
                 n_trans=1,
                 eps=eps,
                 dtype=xp.complex64 if imaging_data.vis.dtype == np.complex64 else xp.complex128,
                 modeord=0,
             )
-            
-            # Set source and target points
-            plan.setpts(u_gpu, v_gpu, s=lgrid_gpu, t=mgrid_gpu)
-            
-            # Prepare weighted data
-            weighted_data = prepare_weighted_visibilities(
-                imaging_data.vis,
-                imaging_data.weights,
-                time_idx=ti
-            )
-            data_gpu = xp.asarray(xp.ravel(weighted_data))
+            plan.setpts(u_gpu, v_gpu)
 
-            # Execute transform
+            data_gpu = xp.asarray(np.ravel(weighted_data))
             output_gpu = plan.execute(data_gpu)
-            
-            # Transfer back and reshape
-            # All frequencies are processed together, so we need to reshape correctly
-            output_cpu = xp.asnumpy(output_gpu)
-            image_stack[ti, :, :, :] = output_cpu.reshape(nfreqs, npix, npix)
+            # Type 1 output is transposed relative to image convention
+            image_stack[ti, 0, :, :] = xp.asnumpy(output_gpu).T
 
         else:
-            # CPU version
             plan = nufft_lib.Plan(
-                nufft_type=1,
-                n_modes=(npix, npix),
+                1,
+                (npix, npix),
                 n_trans=1,
                 eps=eps,
                 dtype=np.complex64 if imaging_data.vis.dtype == np.complex64 else np.complex128,
                 modeord=0,
             )
-            
-            # Set source and target points
-            plan.setpts(u_scaled, v_scaled, s=lgrid_scaled, t=mgrid_scaled)
-            
-            # Prepare weighted data
-            weighted_data = prepare_weighted_visibilities(
-                imaging_data.vis,
-                imaging_data.weights,
-                time_idx=ti
-            )
-            
-            # Execute transform
+            plan.setpts(u_scaled, v_scaled)
+
             output = plan.execute(np.ravel(weighted_data))
-            
-            # Reshape and store
-            #All frequencies are processed together, so we need to reshape correctly
-            image_stack[ti, :, :, :] = output.reshape(nfreqs, npix, npix)
+            # Type 1 output is transposed relative to image convention
+            image_stack[ti, 0, :, :] = output.T
 
     return ImageResult(
         images=image_stack,
-        l_coords=lgrid_flat,
-        m_coords=mgrid_flat,
+        l_coords=lcoords,
+        m_coords=mcoords,
         fov=fov,
         npix=npix
     )
@@ -580,12 +546,10 @@ def snapshot_imager_mfs_type_3(
     
     Notes
     -----
-    Type 3 NUFFT transforms from non-uniform points to non-uniform points.
-    This implementation creates a plan for each frequency channel and processes
-    all time samples together for better efficiency.
-    
-    For regular output grids, consider snapshot_imager_type1 which is typically
-    faster than Type 3.
+    For each time step, all baselines across all frequency channels are
+    concatenated into a single set of non-uniform UV points, producing one
+    wideband MFS image. The output image cube has shape
+    (ntimes, 1, npix, npix).
     """
     # Validate inputs
     validate_imaging_inputs(
@@ -618,52 +582,42 @@ def snapshot_imager_mfs_type_3(
     # Compute the normalization factor for Type 3 NUFFT
     norm_factor = 2 * np.pi / umax
     
-    # Pre-allocate output array
-    image_stack = np.zeros((ntimes, nfreqs, npix, npix), dtype=complex)
-    
-    # Process each frequency
+    # Pre-allocate output array: one MFS image per time step
+    image_stack = np.zeros((ntimes, 1, npix, npix), dtype=complex)
+
+    # Process each time step, combining all baselines and frequencies
     for ti in tqdm.tqdm(range(ntimes), desc="Imaging Times", disable=not verbose):
-        # Scale UV coordinates for this frequency
+        # Ravel UV coords across all baselines and frequencies
         u_scaled = np.ravel(imaging_data.u * norm_factor)
         v_scaled = np.ravel(imaging_data.v * norm_factor)
-        
+
+        # Prepare weighted data: shape (nfreqs, nbls) -> ravel to (nfreqs*nbls,)
+        weighted_data = prepare_weighted_visibilities(
+            imaging_data.vis,
+            imaging_data.weights,
+            time_idx=ti
+        )
+
         if use_gpu:
-            # Transfer coordinates to GPU once per frequency
             u_gpu = xp.asarray(u_scaled)
             v_gpu = xp.asarray(v_scaled)
             lgrid_gpu = xp.asarray(lgrid_scaled)
             mgrid_gpu = xp.asarray(mgrid_scaled)
-            
-            # Create Type 3 plan
+
             plan = nufft_lib.Plan(
                 nufft_type=3,
-                n_modes=2,  # Dimension (2D transform)
+                n_modes=2,
                 n_trans=1,
                 eps=eps,
                 dtype=xp.complex64 if imaging_data.vis.dtype == np.complex64 else xp.complex128
             )
-            
-            # Set source and target points
             plan.setpts(u_gpu, v_gpu, s=lgrid_gpu, t=mgrid_gpu)
-            
-            # Prepare weighted data
-            weighted_data = prepare_weighted_visibilities(
-                imaging_data.vis,
-                imaging_data.weights,
-                time_idx=ti
-            )
-            data_gpu = xp.asarray(xp.ravel(weighted_data))
 
-            # Execute transform
+            data_gpu = xp.asarray(np.ravel(weighted_data))
             output_gpu = plan.execute(data_gpu)
-            
-            # Transfer back and reshape
-            # All frequencies are processed together, so we need to reshape correctly
-            output_cpu = xp.asnumpy(output_gpu)
-            image_stack[ti, :, :, :] = output_cpu.reshape(nfreqs, npix, npix)
+            image_stack[ti, 0, :, :] = xp.asnumpy(output_gpu).reshape(npix, npix)
 
         else:
-            # CPU version
             plan = nufft_lib.Plan(
                 nufft_type=3,
                 n_modes_or_dim=2,
@@ -671,23 +625,10 @@ def snapshot_imager_mfs_type_3(
                 eps=eps,
                 dtype=np.complex64 if imaging_data.vis.dtype == np.complex64 else np.complex128
             )
-            
-            # Set source and target points
             plan.setpts(u_scaled, v_scaled, s=lgrid_scaled, t=mgrid_scaled)
-            
-            # Prepare weighted data
-            weighted_data = prepare_weighted_visibilities(
-                imaging_data.vis,
-                imaging_data.weights,
-                time_idx=ti
-            )
-            
-            # Execute transform
+
             output = plan.execute(np.ravel(weighted_data))
-            
-            # Reshape and store
-            #All frequencies are processed together, so we need to reshape correctly
-            image_stack[ti, :, :, :] = output.reshape(nfreqs, npix, npix)
+            image_stack[ti, 0, :, :] = output.reshape(npix, npix)
 
     return ImageResult(
         images=image_stack,
